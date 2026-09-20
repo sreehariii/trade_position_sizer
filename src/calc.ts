@@ -12,10 +12,17 @@ export interface TradeInputs {
   rrr: number
 }
 
+export type SizingLimit = 'capital' | 'risk'
+
 export interface TradeResult {
   direction: Direction
   riskBudget: number
   riskPerShare: number
+  /** Shares from risk budget alone, before capital cap. */
+  riskBasedQuantity: number
+  /** Max whole shares affordable at entry with available capital (long cash). */
+  maxAffordableQuantity: number
+  sizingLimit: SizingLimit
   quantity: number
   actualRisk: number
   target: number
@@ -85,8 +92,15 @@ export function calculateTrade(input: TradeInputs): TradeResult | null {
   const riskPerShare = Math.abs(input.entry - input.stopLoss)
   if (riskPerShare === 0) return null
 
-  const quantity = Math.floor(riskBudget / riskPerShare)
+  const riskBasedQuantity = Math.floor(riskBudget / riskPerShare)
+  const maxAffordableQuantity = Math.floor(input.capital / input.entry)
+  if (maxAffordableQuantity < 1) return null
+
+  const quantity = Math.min(riskBasedQuantity, maxAffordableQuantity)
   if (quantity < 1) return null
+
+  const sizingLimit: SizingLimit =
+    riskBasedQuantity > maxAffordableQuantity ? 'capital' : 'risk'
 
   const rewardPerShare = riskPerShare * input.rrr
   const target =
@@ -102,6 +116,9 @@ export function calculateTrade(input: TradeInputs): TradeResult | null {
     direction,
     riskBudget,
     riskPerShare,
+    riskBasedQuantity,
+    maxAffordableQuantity,
+    sizingLimit,
     quantity,
     actualRisk,
     target,
